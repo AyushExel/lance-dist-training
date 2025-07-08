@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from torchvision import models
 
 def get_resnet_model(num_classes):
-    model = models.resnet18(weights=None)  # train from scratch
-    model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+    model = models.resnet50(weights=None)  # train from scratch
+    model.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)  # default for resnet50
     model.fc = nn.Linear(model.fc.in_features, num_classes)
     return model
 
