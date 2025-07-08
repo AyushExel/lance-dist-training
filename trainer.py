@@ -31,22 +31,26 @@ _cifar_transform = transforms.Compose([
     transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 ])
 
+# Standard normalization for ImageNet/Places365
+_places_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Resize((224, 224)),
+    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+])
+
 def decode_tensor_image(batch, **kwargs):
     images = []
     labels = []
-
-    # Convert to row-wise list of dictionaries
     for item in batch.to_pylist():
-        img = Image.fromarray(np.frombuffer(item["image"], dtype=np.uint8).reshape(32, 32, 3))
-        tensor = _cifar_transform(img)
+        arr = np.frombuffer(item["image"], dtype=np.uint8).reshape(224, 224, 3)
+        img = Image.fromarray(arr)
+        tensor = _places_transform(img)
         images.append(tensor)
         labels.append(item["label"])
-
     batch = {
         "image": torch.stack(images),
         "label": torch.tensor(labels, dtype=torch.long)
     }
-
     return batch
 
 
@@ -113,6 +117,7 @@ def train(rank, world_size, args):
         epoch_start_time = time.time()
         batch_iter = tqdm(loader, desc=f"Epoch {epoch+1}/{args.epochs}", disable=(rank != 0))
         for batch in batch_iter:
+            import pdb; pdb.set_trace()
             images = batch["image"].to(device)
             labels = batch["label"].to(device)
 
@@ -126,7 +131,7 @@ def train(rank, world_size, args):
             batch_iter.set_postfix(loss=loss.item())
 
         epoch_time = time.time() - epoch_start_time
-        if rank == 0:
+        if rank == 0 and epoch % 10 == 0:
             val_acc = eval_fn(model, loader, device)
             wandb.log({"val_acc": val_acc, "epoch_time": epoch_time})
             print(f"[Epoch {epoch}] Rank {rank} Loss: {total_loss:.4f}, Val Acc: {val_acc:.4f}, Epoch Time: {epoch_time:.2f}s")
@@ -164,9 +169,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_path", type=str, default="data/cifar100.lance")
+    parser.add_argument("--dataset_path", type=str, default="data/places365.lance")
     parser.add_argument("--task_type", type=str, default="classification")
-    parser.add_argument("--num_classes", type=int, default=100)
+    parser.add_argument("--num_classes", type=int, default=365)
     parser.add_argument("--sampler_type", type=str, default="sharded_batch")
     parser.add_argument("--use_safe_loader", action="store_true")
     parser.add_argument("--batch_size", type=int, default=64)
