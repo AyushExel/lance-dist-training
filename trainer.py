@@ -62,11 +62,14 @@ def decode_tensor_image(batch, **kwargs):
 
 
 
-def get_dataset(dataset_path, use_safe, batch_size):
-    return SafeLanceDataset(dataset_path, to_tensor_fn=decode_tensor_image, batch_size=batch_size) if use_safe else LanceDataset(dataset_path, to_tensor_fn=decode_tensor_image, batch_size=batch_size)
+def get_dataset(dataset_path, use_safe, batch_size, sampler=None):
+    if use_safe:
+        return SafeLanceDataset(dataset_path, to_tensor_fn=decode_tensor_image, batch_size=batch_size, sampler=sampler)
+    else:
+        return LanceDataset(dataset_path, to_tensor_fn=decode_tensor_image, batch_size=batch_size, sampler=sampler)
 
 
-def get_sampler(dataset, sampler_type, batch_size, rank, world_size):
+def get_sampler(sampler_type, rank, world_size):
     if sampler_type == "sharded_batch":
         return ShardedBatchSampler(rank=rank, world_size=world_size)
     elif sampler_type == "sharded_fragment":
@@ -77,14 +80,10 @@ def get_sampler(dataset, sampler_type, batch_size, rank, world_size):
         raise ValueError(f"Unsupported sampler type: {sampler_type}")
 
 
-def get_loader(dataset, sampler, use_safe, num_workers):
+def get_loader(dataset, use_safe, num_workers):
     if use_safe:
-        return get_safe_loader(dataset, sampler=sampler, num_workers=num_workers, batch_size=None)
-    if isinstance(dataset, torch.utils.data.IterableDataset):
-        return DataLoader(dataset, batch_size=None, num_workers=num_workers)
-    if isinstance(sampler, torch.utils.data.BatchSampler):
-        return DataLoader(dataset, batch_sampler=sampler, num_workers=num_workers, batch_size=None)
-    return DataLoader(dataset, sampler=sampler, num_workers=num_workers, batch_size=None)
+        return get_safe_loader(dataset, num_workers=num_workers, batch_size=None)
+    return DataLoader(dataset, num_workers=num_workers, batch_size=None)
 
 def train(rank, world_size, args):
     is_distributed = not getattr(args, "no_ddp", False)
@@ -98,9 +97,9 @@ def train(rank, world_size, args):
         print("Warning: CUDA not available. Running on CPU. This will be slow.")
         device = torch.device("cpu")
 
-    dataset = get_dataset(args.dataset_path, args.use_safe_loader, args.batch_size)
-    sampler = get_sampler(dataset, args.sampler_type, args.batch_size, rank, world_size)
-    loader = get_loader(dataset, sampler, args.use_safe_loader, args.num_workers)
+    sampler = get_sampler(args.sampler_type, rank, world_size)
+    dataset = get_dataset(args.dataset_path, args.use_safe_loader, args.batch_size, sampler=sampler)
+    loader = get_loader(dataset, args.use_safe_loader, args.num_workers)
 
     model, loss_fn, eval_fn = get_model_and_loss(args.task_type, args.num_classes)
     model = model.to(device)
