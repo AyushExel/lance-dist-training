@@ -33,16 +33,16 @@ def create_lance_from_classification_dataset(root_path="data/food101", output_pa
             images.append(buf)
             labels.append(label)
             if (idx + 1) % batch_size == 0:
-                yield pa.record_batch({
-                    "image": pa.array(images, type=pa.binary()),
-                    "label": pa.array(labels, type=pa.int64())
-                })
+                yield pa.record_batch(
+                    [pa.array(images, type=pa.binary()), pa.array(labels, type=pa.int64())],
+                    names=["image", "label"]
+                )
                 images, labels = [], []
         if images:
-            yield pa.record_batch({
-                "image": pa.array(images, type=pa.binary()),
-                "label": pa.array(labels, type=pa.int64())
-            })
+            yield pa.record_batch(
+                [pa.array(images, type=pa.binary()), pa.array(labels, type=pa.int64())],
+                names=["image", "label"]
+            )
 
     schema = pa.schema([
         ("image", pa.binary()),
