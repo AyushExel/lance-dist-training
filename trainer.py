@@ -68,25 +68,23 @@ def get_dataset(dataset_path, use_safe, batch_size):
 
 def get_sampler(dataset, sampler_type, batch_size, rank, world_size):
     if sampler_type == "sharded_batch":
-        return ShardedBatchSampler(dataset, world_size=world_size)
+        return ShardedBatchSampler(rank=rank, world_size=world_size)
     elif sampler_type == "sharded_fragment":
-        return ShardedFragmentSampler(dataset, world_size=world_size)
+        return ShardedFragmentSampler(rank=rank, world_size=world_size)
     elif sampler_type == "full_scan":
-        return FullScanSampler(dataset)
+        return FullScanSampler()
     else:
         raise ValueError(f"Unsupported sampler type: {sampler_type}")
 
 
-def get_sampler(dataset, sampler_type, batch_size, rank, world_size):
-    if sampler_type == "sharded_batch":
-        return ShardedBatchSampler(dataset, rank=rank, world_size=world_size)
-    elif sampler_type == "sharded_fragment":
-        return ShardedFragmentSampler(dataset, rank=rank, world_size=world_size)
-    elif sampler_type == "full_scan":
-        return FullScanSampler(dataset)
-    else:
-        raise ValueError(f"Unsupported sampler type: {sampler_type}")
-
+def get_loader(dataset, sampler, use_safe, num_workers):
+    if use_safe:
+        return get_safe_loader(dataset, sampler=sampler, num_workers=num_workers, batch_size=None)
+    if isinstance(dataset, torch.utils.data.IterableDataset):
+        return DataLoader(dataset, batch_size=None, num_workers=num_workers)
+    if isinstance(sampler, torch.utils.data.BatchSampler):
+        return DataLoader(dataset, batch_sampler=sampler, num_workers=num_workers, batch_size=None)
+    return DataLoader(dataset, sampler=sampler, num_workers=num_workers, batch_size=None)
 
 def train(rank, world_size, args):
     is_distributed = not getattr(args, "no_ddp", False)
