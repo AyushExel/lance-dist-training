@@ -77,14 +77,16 @@ def get_sampler(dataset, sampler_type, batch_size, rank, world_size):
         raise ValueError(f"Unsupported sampler type: {sampler_type}")
 
 
-def get_loader(dataset, sampler, use_safe, num_workers):
-    if use_safe:
-        return get_safe_loader(dataset, sampler=sampler, num_workers=num_workers, batch_size=None)
-    if isinstance(dataset, torch.utils.data.IterableDataset):
-        return DataLoader(dataset, batch_size=None, num_workers=num_workers)
-    if isinstance(sampler, torch.utils.data.BatchSampler):
-        return DataLoader(dataset, batch_sampler=sampler, num_workers=num_workers, batch_size=None)
-    return DataLoader(dataset, sampler=sampler, num_workers=num_workers, batch_size=None)
+def get_sampler(dataset, sampler_type, batch_size, rank, world_size):
+    if sampler_type == "sharded_batch":
+        return ShardedBatchSampler(dataset, rank=rank, world_size=world_size)
+    elif sampler_type == "sharded_fragment":
+        return ShardedFragmentSampler(dataset, rank=rank, world_size=world_size)
+    elif sampler_type == "full_scan":
+        return FullScanSampler(dataset)
+    else:
+        raise ValueError(f"Unsupported sampler type: {sampler_type}")
+
 
 def train(rank, world_size, args):
     is_distributed = not getattr(args, "no_ddp", False)
@@ -123,7 +125,6 @@ def train(rank, world_size, args):
         epoch_start_time = time.time()
         batch_iter = tqdm(loader, desc=f"Epoch {epoch+1}/{args.epochs}", disable=(rank != 0))
         for batch in batch_iter:
-            import pdb; pdb.set_trace()
             images = batch["image"].to(device)
             labels = batch["label"].to(device)
 
@@ -183,7 +184,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--lr", type=float, default=0.01)
-    parser.add_argument("--num_workers", type=int, default=4)
+    parser.add_argument("--num_workers", type=int, default=8)
     parser.add_argument("--world_size", type=int, default=1, help="Number of processes/devices")
     parser.add_argument("--no_ddp", action="store_true", help="Run in non-distributed (debug) mode")
 
