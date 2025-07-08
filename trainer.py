@@ -38,13 +38,19 @@ _places_transform = transforms.Compose([
     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 ])
 
+# Food101/ImageNet normalization (mean/std for RGB)
+_food101_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+])
+
 def decode_tensor_image(batch, **kwargs):
     images = []
     labels = []
     for item in batch.to_pylist():
         arr = np.frombuffer(item["image"], dtype=np.uint8).reshape(224, 224, 3)
         img = Image.fromarray(arr)
-        tensor = _places_transform(img)
+        tensor = _food101_transform(img)
         images.append(tensor)
         labels.append(item["label"])
     batch = {
@@ -169,9 +175,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_path", type=str, default="data/places365.lance")
+    parser.add_argument("--dataset_path", type=str, default="data/food101.lance")
     parser.add_argument("--task_type", type=str, default="classification")
-    parser.add_argument("--num_classes", type=int, default=365)
+    parser.add_argument("--num_classes", type=int, default=101)
     parser.add_argument("--sampler_type", type=str, default="sharded_batch")
     parser.add_argument("--use_safe_loader", action="store_true")
     parser.add_argument("--batch_size", type=int, default=64)

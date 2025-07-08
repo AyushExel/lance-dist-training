@@ -6,9 +6,10 @@ from torchvision import transforms
 from tqdm import tqdm
 import numpy as np
 from torchvision.datasets import ImageFolder
+from torchvision.datasets import Food101
 
 
-def create_lance_from_classification_dataset(root_path="data/places365", output_path="data/places365.lance", dataset_name="PLACES365", fragment_size=1024, batch_size=1024, image_size=224):
+def create_lance_from_classification_dataset(root_path="data/food101", output_path="data/food101.lance", dataset_name="FOOD101", fragment_size=1024, batch_size=1024, image_size=224):
     transform = transforms.Compose([
         transforms.Resize((image_size, image_size)),
     ])
@@ -19,6 +20,8 @@ def create_lance_from_classification_dataset(root_path="data/places365", output_
         dataset = datasets.CIFAR10(root=root_path, train=True, download=True)
     elif dataset_name == "PLACES365":
         dataset = ImageFolder(root=root_path, transform=transform)
+    elif dataset_name == "FOOD101":
+        dataset = Food101(root=root_path, split="train", download=True)
     else:
         raise ValueError("Unsupported dataset")
 
@@ -56,6 +59,9 @@ def create_lance_from_classification_dataset(root_path="data/places365", output_
 
     print(f"Lance dataset written to {output_path} with fragment size {fragment_size}")
 
+# Usage:
+# For Food101, run with:
+#   create_lance_from_classification_dataset(dataset_name="FOOD101", root_path="data/food101", output_path="data/food101.lance")
 
 if __name__ == "__main__":
     create_lance_from_classification_dataset()
