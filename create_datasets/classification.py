@@ -9,7 +9,12 @@ from torchvision.datasets import ImageFolder
 from torchvision.datasets import Food101
 
 
-def create_lance_from_classification_dataset(root_path="data/food101", output_path="data/food101.lance", dataset_name="FOOD101", fragment_size=1024, batch_size=1024, image_size=224):
+def create_lance_from_classification_dataset(root_path="data/food101", 
+                                             output_path="data/food101.lance", 
+                                             dataset_name="FOOD101", 
+                                             fragment_size=10000, 
+                                             batch_size=10000, 
+                                             image_size=224):
     transform = transforms.Compose([
         transforms.Resize((image_size, image_size)),
     ])
