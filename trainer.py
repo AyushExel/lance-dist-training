@@ -10,6 +10,8 @@ from torchvision import transforms
 import os
 import wandb
 import numpy as np
+import time
+from tqdm import tqdm
 
 from PIL import Image
 from lance.torch.data import (
@@ -74,20 +76,6 @@ def get_loader(dataset, sampler, use_safe, num_workers):
         return DataLoader(dataset, batch_sampler=sampler, num_workers=num_workers, batch_size=None)
     return DataLoader(dataset, sampler=sampler, num_workers=num_workers, batch_size=None)
 
-def evaluate(model, dataloader, device):
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for batch in dataloader:
-            images = batch["image"].to(device)
-            labels = batch["label"].to(device)
-            outputs = model(images)
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-    return correct / total
-
 def train(rank, world_size, args):
     is_distributed = not getattr(args, "no_ddp", False)
     if is_distributed:
@@ -104,8 +92,7 @@ def train(rank, world_size, args):
     sampler = get_sampler(dataset, args.sampler_type, args.batch_size, rank, world_size)
     loader = get_loader(dataset, sampler, args.use_safe_loader, args.num_workers)
 
-
-    model, loss_fn = get_model_and_loss(args.task_type, args.num_classes)
+    model, loss_fn, eval_fn = get_model_and_loss(args.task_type, args.num_classes)
     model = model.to(device)
 
     if is_distributed:
@@ -119,10 +106,13 @@ def train(rank, world_size, args):
     if rank == 0:
         wandb.init(project="lance-ddp-generic", config=vars(args))
 
+    total_start_time = time.time()
     for epoch in range(args.epochs):
         model.train()
         total_loss = 0.0
-        for batch in loader:
+        epoch_start_time = time.time()
+        batch_iter = tqdm(loader, desc=f"Epoch {epoch+1}/{args.epochs}", disable=(rank != 0))
+        for batch in batch_iter:
             images = batch["image"].to(device)
             labels = batch["label"].to(device)
 
@@ -133,15 +123,22 @@ def train(rank, world_size, args):
             optimizer.step()
 
             total_loss += loss.item()
+            batch_iter.set_postfix(loss=loss.item())
 
+        epoch_time = time.time() - epoch_start_time
         if rank == 0:
-            val_acc = evaluate(model, loader, device)
-            wandb.log({"val_acc": val_acc})
-            print(f"[Epoch {epoch}] Rank {rank} Loss: {total_loss:.4f}, Val Acc: {val_acc:.4f}")
+            val_acc = eval_fn(model, loader, device)
+            wandb.log({"val_acc": val_acc, "epoch_time": epoch_time})
+            print(f"[Epoch {epoch}] Rank {rank} Loss: {total_loss:.4f}, Val Acc: {val_acc:.4f}, Epoch Time: {epoch_time:.2f}s")
 
         if rank == 0:
             wandb.log({"epoch": epoch, "loss": total_loss})
             print(f"[Epoch {epoch}] Rank {rank} Loss: {total_loss:.4f}")
+
+    total_time = time.time() - total_start_time
+    if rank == 0:
+        print(f"Total training time: {total_time:.2f} seconds")
+        wandb.log({"total_training_time": total_time})
 
     if is_distributed:
         dist.destroy_process_group()
